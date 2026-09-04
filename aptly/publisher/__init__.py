@@ -12,7 +12,7 @@ lg = logging.getLogger(__name__)
 
 
 def load_publish(publish):
-    with open(publish, 'r') as publish_file:
+    with open(publish, "r") as publish_file:
         return yaml.load(publish_file)
 
 
@@ -20,6 +20,7 @@ class PublishManager(object):
     """
     Manage multiple publishes
     """
+
     def __init__(self, client, storage=""):
         self.client = client
         self._publishes = {}
@@ -33,55 +34,72 @@ class PublishManager(object):
         try:
             return self._publishes[distribution]
         except KeyError:
-            self._publishes[distribution] = Publish(self.client, distribution, timestamp=self.timestamp, storage=(storage or self.storage))
+            self._publishes[distribution] = Publish(
+                self.client,
+                distribution,
+                timestamp=self.timestamp,
+                storage=(storage or self.storage),
+            )
             return self._publishes[distribution]
 
-    def add(self, snapshot, distributions, component='main', storage=""):
-        """ Add mirror or repo to publish """
+    def add(self, snapshot, distributions, component="main", storage=""):
+        """Add mirror or repo to publish"""
         for dist in distributions:
             self.publish(dist, storage=storage).add(snapshot, component)
 
     def restore_publish(self, components, restore_file, recreate):
         publish_file = load_publish(restore_file)
-        publish_source = Publish(self.client, publish_file.get('publish'), storage=publish_file.get('storage', self.storage))
-        publish_source.restore_publish(publish_file,
-                                       components=components,
-                                       recreate=recreate)
+        publish_source = Publish(
+            self.client,
+            publish_file.get("publish"),
+            storage=publish_file.get("storage", self.storage),
+        )
+        publish_source.restore_publish(
+            publish_file, components=components, recreate=recreate
+        )
 
     def dump_publishes(self, publishes_to_save, dump_dir, prefix):
 
-        if len(dump_dir) > 1 and dump_dir[-1] == '/':
+        if len(dump_dir) > 1 and dump_dir[-1] == "/":
             dump_dir = dump_dir[:-1]
 
         save_list = []
         save_all = True
 
-        if publishes_to_save and not ('all' in publishes_to_save):
+        if publishes_to_save and not ("all" in publishes_to_save):
             save_all = False
 
         re_publish = None
-        if len(publishes_to_save) == 1 and re.search(r'\(.*\)', publishes_to_save[0]):
+        if len(publishes_to_save) == 1 and re.search(r"\(.*\)", publishes_to_save[0]):
             re_publish = re.compile(publishes_to_save[0])
 
-        publishes = self.client.do_get('/publish')
+        publishes = self.client.do_get("/publish")
         for publish in publishes:
-            name = "{}{}{}".format(publish['Storage']+":" if publish['Storage']
-                                else "", publish['Prefix']+"/" if
-                                publish['Prefix'] else "",
-                                publish['Distribution'])
+            name = "{}{}{}".format(
+                publish["Storage"] + ":" if publish["Storage"] else "",
+                publish["Prefix"] + "/" if publish["Prefix"] else "",
+                publish["Distribution"],
+            )
 
             if not re_publish or re_publish.match(name):
                 if save_all or name in publishes_to_save or re_publish:
-                    current_publish = Publish(self.client, name, load=True, storage=publish.get('Storage', self.storage))
+                    current_publish = Publish(
+                        self.client,
+                        name,
+                        load=True,
+                        storage=publish.get("Storage", self.storage),
+                    )
                     if current_publish not in save_list:
                         save_list.append(current_publish)
 
         if not save_all and not re_publish and len(save_list) != len(publishes_to_save):
-            raise Exception('Publish(es) required not found')
+            raise Exception("Publish(es) required not found")
 
         for publish in save_list:
-            storage = '' if not publish.storage else '-{}-'.format(publish.storage)
-            save_path = ''.join([dump_dir, '/', prefix, storage, publish.name.replace('/', '-'), '.yml'])
+            storage = "" if not publish.storage else "-{}-".format(publish.storage)
+            save_path = "".join(
+                [dump_dir, "/", prefix, storage, publish.name.replace("/", "-"), ".yml"]
+            )
             publish.save_publish(save_path)
 
     def _publish_match(self, publish, names=False, name_only=False):
@@ -94,7 +112,7 @@ class PublishManager(object):
                     if re.match(name, publish.name):
                         return True
                 else:
-                    operand = name if name_only else [name, './%s' % name]
+                    operand = name if name_only else [name, "./%s" % name]
                     if publish in operand:
                         return True
             return False
@@ -103,17 +121,19 @@ class PublishManager(object):
 
     def do_publish(self, *args, **kwargs):
         try:
-            publish_dist = kwargs.pop('dist')
+            publish_dist = kwargs.pop("dist")
         except KeyError:
             publish_dist = None
 
         try:
-            publish_names = kwargs.pop('names')
+            publish_names = kwargs.pop("names")
         except KeyError:
             publish_names = None
 
         for publish in self._publishes.values():
-            if self._publish_match(publish.name, publish_names or publish_dist, publish_names):
+            if self._publish_match(
+                publish.name, publish_names or publish_dist, publish_names
+            ):
                 publish.do_publish(*args, **kwargs)
             else:
                 lg.info("Skipping publish %s not matching publish names" % publish.name)
@@ -125,16 +145,22 @@ class PublishManager(object):
         return list(keys.keys())
 
     def do_purge(self, config, components=[], hard_purge=False):
-        (repo_dict, publish_dict) = self.get_repo_information(config, self.client, hard_purge, components)
-        publishes = self.client.do_get('/publish')
+        (repo_dict, publish_dict) = self.get_repo_information(
+            config, self.client, hard_purge, components
+        )
+        publishes = self.client.do_get("/publish")
         publish_list = []
 
         for publish in publishes:
-            name = '{}/{}'.format(publish['Prefix'].replace("/", "_"), publish['Distribution'])
+            name = "{}/{}".format(
+                publish["Prefix"].replace("/", "_"), publish["Distribution"]
+            )
             publish_list.append(Publish(self.client, name, load=True))
 
         for publish in publish_list:
-            repo_dict = publish.purge_publish(repo_dict, publish_dict, components, publish=True)
+            repo_dict = publish.purge_publish(
+                repo_dict, publish_dict, components, publish=True
+            )
 
         if hard_purge:
             self.remove_unused_packages(repo_dict)
@@ -142,32 +168,34 @@ class PublishManager(object):
 
     @staticmethod
     def get_repo_information(config, client, fill_repo=False, components=[]):
-        """ fill two dictionnaries : one containing all the packages for every repository
-            and the second one associating to every component of every publish its repository"""
+        """fill two dictionnaries : one containing all the packages for every repository
+        and the second one associating to every component of every publish its repository"""
         repo_dict = {}
         publish_dict = {}
 
-        for origin in ['repo', 'mirror']:
+        for origin in ["repo", "mirror"]:
             for name, repo in config.get(origin, {}).items():
-                if components and repo.get('component') not in components:
+                if components and repo.get("component") not in components:
                     continue
-                if fill_repo and origin == 'repo':
+                if fill_repo and origin == "repo":
                     packages = Publish._get_packages("repos", name)
                     repo_dict[name] = packages
-                for distribution in repo.get('distributions'):
-                    publish_name = str.join('/', distribution.split('/')[:-1])
-                    publish_dict[(publish_name, repo.get('component'))] = name
+                for distribution in repo.get("distributions"):
+                    publish_name = str.join("/", distribution.split("/")[:-1])
+                    publish_dict[(publish_name, repo.get("component"))] = name
 
         return (repo_dict, publish_dict)
 
     def remove_unused_packages(self, repo_dict):
         for repo_name, packages in repo_dict.items():
             if packages:
-                self.client.do_delete('/repos/%s/packages' % repo_name, data={'PackageRefs': packages})
+                self.client.do_delete(
+                    "/repos/%s/packages" % repo_name, data={"PackageRefs": packages}
+                )
 
     def cleanup_snapshots(self):
         # requesting graph.dot always works, even if graphviz (dot) is not installed
-        dot_data = self.client.do_get('/graph.dot')
+        dot_data = self.client.do_get("/graph.dot")
 
         # extract edges from dot-data
         # edges = list of pairs with (node_id, node_id)
@@ -176,20 +204,30 @@ class PublishManager(object):
         # extract nodes from dot-data
         # list of tuples with (node_id, node_type, node_name)
         # node_type is one of 'Repo'|'Snapshot'|'Publish'
-        nodes_raw = re.findall('[ \t]+"([^"]+)".*label="{(Repo|Snapshot|Published) ([^|]+)[^\}"]+}"', dot_data)
+        nodes_raw = re.findall(
+            '[ \t]+"([^"]+)".*label="{(Repo|Snapshot|Published) ([^|]+)[^\}"]+}"',
+            dot_data,
+        )
 
         # convert nodes_raw into nodes
         # nodes = dict of node_id to node
         # node = (node_type, node_name)
-        nodes = {node_id: (node_type, node_name) for node_id, node_type, node_name in nodes_raw}
+        nodes = {
+            node_id: (node_type, node_name)
+            for node_id, node_type, node_name in nodes_raw
+        }
 
         # start with published and flood fill other nodes
-        published_node_ids = [key for key in nodes if nodes[key][0] == 'Published']
+        published_node_ids = [key for key in nodes if nodes[key][0] == "Published"]
 
         # do flood fill
         while True:
             # get a list of source node_ids of incoming edges
-            incoming_node_ids = [edge_from for edge_from, edge_to in edges if edge_to in published_node_ids and edge_from not in published_node_ids]
+            incoming_node_ids = [
+                edge_from
+                for edge_from, edge_to in edges
+                if edge_to in published_node_ids and edge_from not in published_node_ids
+            ]
 
             # add incoming node_ids
             published_node_ids.extend(incoming_node_ids)
@@ -199,19 +237,23 @@ class PublishManager(object):
                 break
 
         # we got published nodes, invert the set
-        non_published_node_ids = [node_id for node_id in nodes if node_id not in published_node_ids]
+        non_published_node_ids = [
+            node_id for node_id in nodes if node_id not in published_node_ids
+        ]
 
         # list of nodes with (node_type, node_name)
         unreleased_nodes = [nodes[node_id] for node_id in non_published_node_ids]
 
         # use only nodes of type 'Snapshot'
-        unreleased_snapshots = [node[1] for node in unreleased_nodes if node[0] == 'Snapshot']
+        unreleased_snapshots = [
+            node[1] for node in unreleased_nodes if node[0] == "Snapshot"
+        ]
 
         # actually delete snapshots that are not published
         for snapshot in unreleased_snapshots:
             lg.info("Deleting snapshot %s" % snapshot)
             try:
-                self.client.do_delete('/snapshots/%s' % snapshot)
+                self.client.do_delete("/snapshots/%s" % snapshot)
             except AptlyException as e:
                 if e.res.status_code == 409:
                     lg.warning("Snapshot %s is being used, can't delete" % snapshot)
@@ -223,30 +265,43 @@ class Publish(object):
     """
     Single publish object
     """
-    def __init__(self, client, distribution, timestamp=None, recreate=False, load=False, merge_prefix='_', storage="", architectures=[]):
+
+    def __init__(
+        self,
+        client,
+        distribution,
+        timestamp=None,
+        recreate=False,
+        load=False,
+        merge_prefix="_",
+        storage="",
+        architectures=[],
+    ):
         self.client = client
         self.recreate = recreate
         self.architectures = architectures
 
         # Try to get storage from distribution (eg. s3:mys3:xenial)
-        dist_split = distribution.split(':')
+        dist_split = distribution.split(":")
         if len(dist_split) > 1:
             self.storage = "{}:{}".format(dist_split[0], dist_split[1])
             distribution = dist_split[-1]
         else:
             self.storage = storage
 
-        dist_split = distribution.split('/')
+        dist_split = distribution.split("/")
         self.distribution = dist_split[-1]
         if dist_split[0] != self.distribution:
             self.prefix = "_".join(dist_split[:-1])
         else:
-            self.prefix = ''
+            self.prefix = ""
 
-        self.name = '%s/%s' % (self.prefix or '.', self.distribution)
-        self.full_name = "{}{}{}".format(self.storage+":" if self.storage else
-                                         "/", self.prefix + "/" if self.prefix else
-                                         "", self.distribution)
+        self.name = "%s/%s" % (self.prefix or ".", self.distribution)
+        self.full_name = "{}{}{}".format(
+            self.storage + ":" if self.storage else "/",
+            self.prefix + "/" if self.prefix else "",
+            self.distribution,
+        )
 
         if not timestamp:
             self.timestamp = int(time.time())
@@ -279,7 +334,10 @@ class Publish(object):
 
         Return tuple (diff, equal) of dict {'component': ['snapshot']}
         """
-        lg.debug("Comparing publish %s (%s) and %s (%s)" % (self.name, self.storage or "local", other.name, other.storage or "local"))
+        lg.debug(
+            "Comparing publish %s (%s) and %s (%s)"
+            % (self.name, self.storage or "local", other.name, other.storage or "local")
+        )
 
         diff, equal = ({}, {})
 
@@ -289,12 +347,16 @@ class Publish(object):
                 diff[component] = snapshots
                 continue
 
-            equal_snapshots = list(set(snapshots).intersection(other.components[component]))
+            equal_snapshots = list(
+                set(snapshots).intersection(other.components[component])
+            )
             if equal_snapshots:
                 lg.debug("Equal snapshots for %s: %s" % (component, equal_snapshots))
                 equal[component] = equal_snapshots
 
-            diff_snapshots = list(set(snapshots).difference(other.components[component]))
+            diff_snapshots = list(
+                set(snapshots).difference(other.components[component])
+            )
             if diff_snapshots:
                 lg.debug("Different snapshots for %s: %s" % (component, diff_snapshots))
                 diff[component] = diff_snapshots
@@ -310,43 +372,43 @@ class Publish(object):
         newlist = []
         if component in self.components.keys():
             for snapshot in self.publish_snapshots:
-                if snapshot["Name"] not in self.components[component] and snapshot not in newlist:
+                if (
+                    snapshot["Name"] not in self.components[component]
+                    and snapshot not in newlist
+                ):
                     newlist.append(snapshot)
         else:
             newlist = self.publish_snapshots
-        newlist.append({
-            'Component': component,
-            'Name': new_snapshot
-        })
+        newlist.append({"Component": component, "Name": new_snapshot})
 
         self.components[component] = [new_snapshot]
         self.publish_snapshots = newlist
 
     def create_snapshot_from_packages(self, packages, name, description):
         self.client.do_post(
-            '/snapshots',
+            "/snapshots",
             data={
-                'Name': name,
-                'SourceSnapshots': [],
-                'Description': description,
-                'PackageRefs': packages,
-            }
+                "Name": name,
+                "SourceSnapshots": [],
+                "Description": description,
+                "PackageRefs": packages,
+            },
         )
 
     @staticmethod
     @CachedMethod
     def _get_packages(client, source_type, source_name):
-        return client.do_get('/{}/{}/packages'.format(source_type, source_name))
+        return client.do_get("/{}/{}/packages".format(source_type, source_name))
 
     @staticmethod
     @CachedMethod
     def _get_publishes(client):
-        return client.do_get('/publish')
+        return client.do_get("/publish")
 
     @staticmethod
     @CachedMethod
     def _get_snapshots(client):
-        return client.do_get('/snapshots', {'sort': 'time'})
+        return client.do_get("/snapshots", {"sort": "time"})
 
     def _get_publish(self):
         """
@@ -354,15 +416,19 @@ class Publish(object):
         """
         publishes = self._get_publishes(self.client)
         for publish in publishes:
-            if publish['Distribution'] == self.distribution and \
-                    publish['Prefix'].replace("/", "_") == (self.prefix or '.') and \
-                    publish['Storage'] == self.storage:
+            if (
+                publish["Distribution"] == self.distribution
+                and publish["Prefix"].replace("/", "_") == (self.prefix or ".")
+                and publish["Storage"] == self.storage
+            ):
                 return publish
-        raise NoSuchPublish("Publish %s (%s) does not exist" % (self.name, self.storage or "local"))
+        raise NoSuchPublish(
+            "Publish %s (%s) does not exist" % (self.name, self.storage or "local")
+        )
 
     def _remove_snapshots(self, snapshots):
         for snapshot in snapshots:
-            self.client.do_delete('/snapshots/%s' % snapshot)
+            self.client.do_delete("/snapshots/%s" % snapshot)
 
     def save_publish(self, save_path):
         """
@@ -380,15 +446,23 @@ class Publish(object):
             package_dict = []
             for package in packages:
                 (arch, name, version, ref) = self.parse_package_ref(package)
-                package_dict.append({'package': name, 'version': version, 'arch': arch, 'ref': ref})
+                package_dict.append(
+                    {"package": name, "version": version, "arch": arch, "ref": ref}
+                )
             snapshot = self._find_snapshot(snapshots[0])
 
-            yaml_dict["components"].append({'component': component, 'snapshot': snapshot['Name'],
-                                            'description': snapshot['Description'], 'packages': package_dict})
+            yaml_dict["components"].append(
+                {
+                    "component": component,
+                    "snapshot": snapshot["Name"],
+                    "description": snapshot["Description"],
+                    "packages": package_dict,
+                }
+            )
 
-        name = self.name.replace('/', '-')
+        name = self.name.replace("/", "-")
         lg.info("Saving publish %s in %s" % (name, save_path))
-        with open(save_path, 'w') as save_file:
+        with open(save_path, "w") as save_file:
             yaml.dump(yaml_dict, save_file, default_flow_style=False)
 
     def purge_publish(self, repo_dict, publish_dict, components=[], publish=False):
@@ -403,7 +477,7 @@ class Publish(object):
             name = snapshot["Name"]
             component = snapshot["Component"]
             purge_packages = []
-            location = self.name.split('/')[0].replace('_', '/')
+            location = self.name.split("/")[0].replace("_", "/")
 
             if (location, component) in publish_dict:
                 repo_name = publish_dict[(location, component)]
@@ -418,42 +492,52 @@ class Publish(object):
                 continue
 
             packages = self._get_packages(self.client, "snapshots", name)
-            packages = sorted(packages, key=lambda x: self.parse_package_ref(x)[2], reverse=True, cmp=apt_pkg.version_compare)
+            packages = sorted(
+                packages,
+                key=lambda x: self.parse_package_ref(x)[2],
+                reverse=True,
+                cmp=apt_pkg.version_compare,
+            )
 
             for package in packages:
                 package_name = self.parse_package_ref(package)[1]
 
                 if package_name not in processed:
                     processed.append(package_name)
-                    if repo_dict and repo_name in repo_dict and package in repo_dict[repo_name]:
+                    if (
+                        repo_dict
+                        and repo_name in repo_dict
+                        and package in repo_dict[repo_name]
+                    ):
                         repo_dict[repo_name].remove(package)
 
                     purge_packages.append(package)
 
             if purge_packages != packages:
-                snapshot_name = '{}-{}'.format(name, 'purged')
+                snapshot_name = "{}-{}".format(name, "purged")
                 try:
                     lg.debug("Creating new snapshot: %s" % snapshot_name)
                     self.client.do_post(
-                        '/snapshots',
+                        "/snapshots",
                         data={
-                            'Name': snapshot_name,
-                            'SourceSnapshots': [],
-                            'Description': 'Minimal snapshot from {}'.format(repo_name),
-                            'PackageRefs': purge_packages,
-                        }
+                            "Name": snapshot_name,
+                            "SourceSnapshots": [],
+                            "Description": "Minimal snapshot from {}".format(repo_name),
+                            "PackageRefs": purge_packages,
+                        },
                     )
 
                 except AptlyException as e:
                     if e.res.status_code == 404:
-                        raise Exception('Error while creating snapshot : {}'.format(repr(e)))
+                        raise Exception(
+                            "Error while creating snapshot : {}".format(repr(e))
+                        )
                     else:
                         lg.debug("Snapshot %s already exist" % snapshot_name)
 
-                new_publish_snapshots.append({
-                    'Component': component,
-                    'Name': snapshot_name
-                })
+                new_publish_snapshots.append(
+                    {"Component": component, "Name": snapshot_name}
+                )
             else:
                 new_publish_snapshots.append(snapshot)
 
@@ -481,8 +565,8 @@ class Publish(object):
         to_publish = []
         created_snapshots = []
 
-        for saved_component in config.get('components', []):
-            component_name = saved_component.get('component')
+        for saved_component in config.get("components", []):
+            component_name = saved_component.get("component")
 
             if not component_name:
                 raise Exception("Corrupted file")
@@ -491,29 +575,38 @@ class Publish(object):
                 continue
 
             saved_packages = []
-            if not saved_component.get('packages'):
+            if not saved_component.get("packages"):
                 raise Exception("Component %s is empty" % component_name)
 
-            for package in saved_component.get('packages'):
-                package_ref = '{} {} {} {}'.format(package.get('arch'), package.get('package'), package.get('version'), package.get('ref'))
+            for package in saved_component.get("packages"):
+                package_ref = "{} {} {} {}".format(
+                    package.get("arch"),
+                    package.get("package"),
+                    package.get("version"),
+                    package.get("ref"),
+                )
                 saved_packages.append(package_ref)
 
             to_publish.append(component_name)
 
             timestamp = time.strftime("%Y%m%d%H%M%S")
-            snapshot_name = '{}-{}-{}'.format("restored", timestamp, saved_component.get('snapshot'))
-            lg.debug("Creating snapshot %s for component %s of packages: %s"
-                     % (snapshot_name, component_name, saved_packages))
+            snapshot_name = "{}-{}-{}".format(
+                "restored", timestamp, saved_component.get("snapshot")
+            )
+            lg.debug(
+                "Creating snapshot %s for component %s of packages: %s"
+                % (snapshot_name, component_name, saved_packages)
+            )
 
             try:
                 self.client.do_post(
-                    '/snapshots',
+                    "/snapshots",
                     data={
-                        'Name': snapshot_name,
-                        'SourceSnapshots': [],
-                        'Description': saved_component.get('description'),
-                        'PackageRefs': saved_packages,
-                    }
+                        "Name": snapshot_name,
+                        "SourceSnapshots": [],
+                        "Description": saved_component.get("description"),
+                        "PackageRefs": saved_packages,
+                    },
                 )
                 created_snapshots.append(snapshot_name)
             except AptlyException as e:
@@ -525,17 +618,24 @@ class Publish(object):
                 else:
                     raise
 
-            new_publish_snapshots.append({
-                'Component': component_name,
-                'Name': snapshot_name
-            })
+            new_publish_snapshots.append(
+                {"Component": component_name, "Name": snapshot_name}
+            )
 
         if components:
-            self.publish_snapshots = [x for x in self.publish_snapshots if x['Component'] not in components and x['Component'] not in to_publish]
-            check_components = [x for x in new_publish_snapshots if x['Component'] in components]
+            self.publish_snapshots = [
+                x
+                for x in self.publish_snapshots
+                if x["Component"] not in components and x["Component"] not in to_publish
+            ]
+            check_components = [
+                x for x in new_publish_snapshots if x["Component"] in components
+            ]
             if len(check_components) != len(components):
                 self._remove_snapshots(created_snapshots)
-                raise Exception("Not possible to find all the components required in the backup file")
+                raise Exception(
+                    "Not possible to find all the components required in the backup file"
+                )
 
         self.publish_snapshots += new_publish_snapshots
         self.do_publish(recreate=recreate, merge_snapshots=False)
@@ -545,17 +645,16 @@ class Publish(object):
         Load publish info from remote
         """
         publish = self._get_publish()
-        self.architectures = publish['Architectures']
-        for source in publish['Sources']:
-            component = source['Component']
-            snapshot = source['Name']
-            self.publish_snapshots.append({
-                'Component': component,
-                'Name': snapshot
-            })
+        self.architectures = publish["Architectures"]
+        for source in publish["Sources"]:
+            component = source["Component"]
+            snapshot = source["Name"]
+            self.publish_snapshots.append({"Component": component, "Name": snapshot})
 
             snapshot_remote = self._find_snapshot(snapshot)
-            for source in self._get_source_snapshots(snapshot_remote, fallback_self=True):
+            for source in self._get_source_snapshots(
+                snapshot_remote, fallback_self=True
+            ):
                 self.add(source, component)
 
     def get_packages(self, component=None, components=[], packages=None):
@@ -567,11 +666,13 @@ class Publish(object):
 
         package_refs = []
         for snapshot in self.publish_snapshots:
-            if component and snapshot['Component'] not in components:
+            if component and snapshot["Component"] not in components:
                 # We don't want packages for this component
                 continue
 
-            component_refs = self._get_packages(self.client, "snapshots", snapshot['Name'])
+            component_refs = self._get_packages(
+                self.client, "snapshots", snapshot["Name"]
+            )
             if packages:
                 # Filter package names
                 for ref in component_refs:
@@ -588,10 +689,10 @@ class Publish(object):
         """
         if not ref:
             return None
-        parsed = re.match('(.*)\ (.*)\ (.*)\ (.*)', ref)
+        parsed = re.match("(.*)\ (.*)\ (.*)\ (.*)", ref)
         return parsed.groups()
 
-    def add(self, snapshot, component='main'):
+    def add(self, snapshot, component="main"):
         """
         Add snapshot of component to publish
         """
@@ -606,8 +707,7 @@ class Publish(object):
         """
         remote_snapshots = self._get_snapshots(self.client)
         for remote in reversed(remote_snapshots):
-            if remote["Name"] == name or \
-                    re.match(name, remote["Name"]):
+            if remote["Name"] == name or re.match(name, remote["Name"]):
                 return remote
         return None
 
@@ -620,9 +720,9 @@ class Publish(object):
         if not snapshot:
             return []
 
-        source_snapshots = re.findall(r"'([\w\d\.-]+)'", snapshot['Description'])
+        source_snapshots = re.findall(r"'([\w\d\.-]+)'", snapshot["Description"])
         if not source_snapshots and fallback_self:
-            source_snapshots = [snapshot['Name']]
+            source_snapshots = [snapshot["Name"]]
 
         source_snapshots.sort()
         return source_snapshots
@@ -635,15 +735,24 @@ class Publish(object):
         for component, snapshots in self.components.items():
             if len(snapshots) <= 1:
                 # Only one snapshot, no need to merge
-                lg.debug("Component %s has only one snapshot %s, not creating merge snapshot" % (component, snapshots))
-                self.publish_snapshots.append({
-                    'Component': component,
-                    'Name': snapshots[0]
-                })
+                lg.debug(
+                    "Component %s has only one snapshot %s, not creating merge snapshot"
+                    % (component, snapshots)
+                )
+                self.publish_snapshots.append(
+                    {"Component": component, "Name": snapshots[0]}
+                )
                 continue
 
             # Look if merged snapshot doesn't already exist
-            remote_snapshot = self._find_snapshot(r'^%s%s-%s-\d+' % (self.merge_prefix, self.name.replace('./', '').replace('/', '-'), component))
+            remote_snapshot = self._find_snapshot(
+                r"^%s%s-%s-\d+"
+                % (
+                    self.merge_prefix,
+                    self.name.replace("./", "").replace("/", "-"),
+                    component,
+                )
+            )
             if remote_snapshot:
                 source_snapshots = self._get_source_snapshots(remote_snapshot)
 
@@ -651,17 +760,30 @@ class Publish(object):
                 snapshots_want = list(snapshots)
                 snapshots_want.sort()
 
-                lg.debug("Comparing snapshots: snapshot_name=%s, snapshot_sources=%s, wanted_sources=%s" % (remote_snapshot['Name'], source_snapshots, snapshots_want))
+                lg.debug(
+                    "Comparing snapshots: snapshot_name=%s, snapshot_sources=%s, wanted_sources=%s"
+                    % (remote_snapshot["Name"], source_snapshots, snapshots_want)
+                )
                 if snapshots_want == source_snapshots:
-                    lg.info("Remote merge snapshot already exists: %s (%s)" % (remote_snapshot['Name'], source_snapshots))
-                    self.publish_snapshots.append({
-                        'Component': component,
-                        'Name': remote_snapshot['Name']
-                    })
+                    lg.info(
+                        "Remote merge snapshot already exists: %s (%s)"
+                        % (remote_snapshot["Name"], source_snapshots)
+                    )
+                    self.publish_snapshots.append(
+                        {"Component": component, "Name": remote_snapshot["Name"]}
+                    )
                     continue
 
-            snapshot_name = '%s%s-%s-%s' % (self.merge_prefix, self.name.replace('./', '').replace('/', '-'), component, self.timestamp)
-            lg.info("Creating merge snapshot %s for component %s of snapshots %s" % (snapshot_name, component, snapshots))
+            snapshot_name = "%s%s-%s-%s" % (
+                self.merge_prefix,
+                self.name.replace("./", "").replace("/", "-"),
+                component,
+                self.timestamp,
+            )
+            lg.info(
+                "Creating merge snapshot %s for component %s of snapshots %s"
+                % (snapshot_name, component, snapshots)
+            )
             package_refs = []
             for snapshot in snapshots:
                 # Get package refs from each snapshot
@@ -670,52 +792,74 @@ class Publish(object):
 
             try:
                 self.client.do_post(
-                    '/snapshots',
+                    "/snapshots",
                     data={
-                        'Name': snapshot_name,
-                        'SourceSnapshots': snapshots,
-                        'Description': "Merged from sources: %s" % ', '.join("'%s'" % snap for snap in snapshots),
-                        'PackageRefs': package_refs,
-                    }
+                        "Name": snapshot_name,
+                        "SourceSnapshots": snapshots,
+                        "Description": "Merged from sources: %s"
+                        % ", ".join("'%s'" % snap for snap in snapshots),
+                        "PackageRefs": package_refs,
+                    },
                 )
             except AptlyException as e:
                 if e.res.status_code == 400:
-                    lg.warning("Error creating snapshot %s, assuming it already exists" % snapshot_name)
+                    lg.warning(
+                        "Error creating snapshot %s, assuming it already exists"
+                        % snapshot_name
+                    )
                 else:
                     raise
 
-            self.publish_snapshots.append({
-                'Component': component,
-                'Name': snapshot_name
-            })
+            self.publish_snapshots.append(
+                {"Component": component, "Name": snapshot_name}
+            )
 
     def drop_publish(self):
-        lg.info("Deleting publish, distribution=%s, storage=%s" % (self.name, self.storage or "local"))
-        self.client.do_delete('/publish/%s' % (self.full_name))
+        lg.info(
+            "Deleting publish, distribution=%s, storage=%s"
+            % (self.name, self.storage or "local")
+        )
+        self.client.do_delete("/publish/%s" % (self.full_name))
 
-    def update_publish(self, force_overwrite=False, publish_contents=False,
-                       acquire_by_hash=True):
-        lg.info("Updating publish, distribution=%s storage=%s snapshots=%s" %
-                (self.name, self.storage or "local", self.publish_snapshots))
+    def update_publish(
+        self, force_overwrite=False, publish_contents=False, acquire_by_hash=True
+    ):
+        lg.info(
+            "Updating publish, distribution=%s storage=%s snapshots=%s"
+            % (self.name, self.storage or "local", self.publish_snapshots)
+        )
         self.client.do_put(
-            '/publish/%s' % (self.full_name),
+            "/publish/%s" % (self.full_name),
             {
-                'Snapshots': self.publish_snapshots,
-                'ForceOverwrite': force_overwrite,
-                'SkipContents': not publish_contents,
-                'AcquireByHash': acquire_by_hash,
-            }
+                "Snapshots": self.publish_snapshots,
+                "ForceOverwrite": force_overwrite,
+                "SkipContents": not publish_contents,
+                "AcquireByHash": acquire_by_hash,
+            },
         )
 
-    def create_publish(self, force_overwrite=False, publish_contents=False,
-                       architectures=None, acquire_by_hash=True):
-        lg.info("Creating new publish, distribution=%s storage=%s snapshots=%s, architectures=%s" %
-                (self.name, self.storage or "local", self.publish_snapshots, architectures))
+    def create_publish(
+        self,
+        force_overwrite=False,
+        publish_contents=False,
+        architectures=None,
+        acquire_by_hash=True,
+        gpg_passphrase_file=None,
+    ):
+        lg.info(
+            "Creating new publish, distribution=%s storage=%s snapshots=%s, architectures=%s"
+            % (
+                self.name,
+                self.storage or "local",
+                self.publish_snapshots,
+                architectures,
+            )
+        )
 
         if self.prefix:
-            prefix = '%s%s' % ("/"+self.storage+":" or "/", self.prefix)
+            prefix = "%s%s" % ("/" + self.storage + ":" or "/", self.prefix)
         else:
-            prefix = '%s' % ("/"+self.storage+":" or "")
+            prefix = "%s" % ("/" + self.storage + ":" or "")
 
         opts = {
             "Storage": self.storage,
@@ -723,23 +867,31 @@ class Publish(object):
             "Distribution": self.distribution,
             "Sources": self.publish_snapshots,
             "ForceOverwrite": force_overwrite,
-            'SkipContents': not publish_contents,
-            'AcquireByHash': acquire_by_hash,
+            "SkipContents": not publish_contents,
+            "AcquireByHash": acquire_by_hash,
         }
+        if gpg_passphrase_file:
+            opts["Signing"] = {"PassphraseFile": gpg_passphrase_file}
 
         if architectures or self.architectures:
-            opts['Architectures'] = architectures or self.architectures
+            opts["Architectures"] = architectures or self.architectures
 
-        self.client.do_post(
-            '/publish%s' % (prefix or ''),
-            opts
-        )
+        self.client.do_post("/publish%s" % (prefix or ""), opts)
 
-    def do_publish(self, recreate=False, no_recreate=False,
-                   force_overwrite=False, publish_contents=False,
-                   acquire_by_hash=False, architectures=None,
-                   merge_snapshots=True, only_latest=False, config=None,
-                   components=[]):
+    def do_publish(
+        self,
+        recreate=False,
+        no_recreate=False,
+        force_overwrite=False,
+        publish_contents=False,
+        acquire_by_hash=False,
+        architectures=None,
+        merge_snapshots=True,
+        only_latest=False,
+        config=None,
+        components=[],
+        gpg_passphrase_file=None,
+    ):
         if merge_snapshots:
             self.merge_snapshots()
         try:
@@ -753,39 +905,63 @@ class Publish(object):
 
         if not publish:
             # New publish
-            self.create_publish(force_overwrite, publish_contents, architectures
-                                or self.architectures, acquire_by_hash)
+            self.create_publish(
+                force_overwrite,
+                publish_contents,
+                architectures or self.architectures,
+                acquire_by_hash,
+                gpg_passphrase_file=gpg_passphrase_file,
+            )
         else:
             # Test if publish is up to date
-            to_publish = [x['Name'] for x in self.publish_snapshots]
-            published = [x['Name'] for x in publish['Sources']]
+            to_publish = [x["Name"] for x in self.publish_snapshots]
+            published = [x["Name"] for x in publish["Sources"]]
 
             to_publish.sort()
             published.sort()
 
             if recreate:
-                lg.info("Recreating publish %s (%s)" % (self.name, self.storage or "local"))
+                lg.info(
+                    "Recreating publish %s (%s)" % (self.name, self.storage or "local")
+                )
                 self.drop_publish()
-                self.create_publish(force_overwrite, publish_contents,
-                                    architectures or self.architectures,
-                                    acquire_by_hash)
+                self.create_publish(
+                    force_overwrite,
+                    publish_contents,
+                    architectures or self.architectures,
+                    acquire_by_hash,
+                    gpg_passphrase_file=gpg_passphrase_file,
+                )
             elif to_publish == published:
-                lg.info("Publish %s (%s) is up to date" % (self.name, self.storage or "local"))
+                lg.info(
+                    "Publish %s (%s) is up to date"
+                    % (self.name, self.storage or "local")
+                )
             else:
                 try:
-                    self.update_publish(force_overwrite, publish_contents,
-                                        acquire_by_hash)
+                    self.update_publish(
+                        force_overwrite, publish_contents, acquire_by_hash
+                    )
                 except AptlyException as e:
                     if e.res.status_code == 404:
                         # Publish exists but we are going to add some new
                         # components. Unfortunately only way is to recreate it
                         if no_recreate:
-                            lg.error("Cannot update publish %s (adding new components?), falling back to recreating it is disabled so skipping." % self.full_name)
+                            lg.error(
+                                "Cannot update publish %s (adding new components?), falling back to recreating it is disabled so skipping."
+                                % self.full_name
+                            )
                         else:
-                            lg.warning("Cannot update publish %s (adding new components?), falling back to recreating it" % self.full_name)
+                            lg.warning(
+                                "Cannot update publish %s (adding new components?), falling back to recreating it"
+                                % self.full_name
+                            )
                             self.drop_publish()
-                            self.create_publish(force_overwrite,
-                                                publish_contents,
-                                                architectures or self.architectures)
+                            self.create_publish(
+                                force_overwrite,
+                                publish_contents,
+                                architectures or self.architectures,
+                                gpg_passphrase_file=gpg_passphrase_file,
+                            )
                     else:
                         raise
