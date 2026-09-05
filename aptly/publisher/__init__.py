@@ -298,7 +298,7 @@ class Publish(object):
 
         self.name = "%s/%s" % (self.prefix or ".", self.distribution)
         self.full_name = "{}{}{}".format(
-            self.storage + ":" if self.storage else "/",
+            self.storage + ":" if self.storage else "",
             self.prefix + "/" if self.prefix else "",
             self.distribution,
         )
