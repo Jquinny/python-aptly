@@ -822,21 +822,26 @@ class Publish(object):
         self.client.do_delete("/publish/%s" % (self.full_name))
 
     def update_publish(
-        self, force_overwrite=False, publish_contents=False, acquire_by_hash=True
+        self,
+        force_overwrite=False,
+        publish_contents=False,
+        acquire_by_hash=True,
+        gpg_passphrase_file=None,
     ):
         lg.info(
             "Updating publish, distribution=%s storage=%s snapshots=%s"
             % (self.name, self.storage or "local", self.publish_snapshots)
         )
-        self.client.do_put(
-            "/publish/%s" % (self.full_name),
-            {
-                "Snapshots": self.publish_snapshots,
-                "ForceOverwrite": force_overwrite,
-                "SkipContents": not publish_contents,
-                "AcquireByHash": acquire_by_hash,
-            },
-        )
+        opts = {
+            "Snapshots": self.publish_snapshots,
+            "ForceOverwrite": force_overwrite,
+            "SkipContents": not publish_contents,
+            "AcquireByHash": acquire_by_hash,
+        }
+        if gpg_passphrase_file:
+            opts["Signing"] = {"PassphraseFile": gpg_passphrase_file}
+
+        self.client.do_put("/publish/%s" % (self.full_name), opts)
 
     def create_publish(
         self,
@@ -940,7 +945,10 @@ class Publish(object):
             else:
                 try:
                     self.update_publish(
-                        force_overwrite, publish_contents, acquire_by_hash
+                        force_overwrite,
+                        publish_contents,
+                        acquire_by_hash,
+                        gpg_passphrase_file=gpg_passphrase_file,
                     )
                 except AptlyException as e:
                     if e.res.status_code == 404:
