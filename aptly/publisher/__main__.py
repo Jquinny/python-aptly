@@ -54,7 +54,7 @@ def main():
     group_publish.add_argument('--dists', nargs='+', help="Space-separated list of distribution to work with (including prefix), default all.")
     group_publish.add_argument('--architectures', nargs='+', help="List of architectures to publish (also determined by config, defaults to amd64, i386)")
     group_publish.add_argument('--only-latest', action="store_true", default=False, help="Publish only latest packages of every publishes")
-    group_publish.add_argument('--gpg-passphrase-file', type=Path, help="The path to the gpg passphrase file for signing the publish")
+    group_publish.add_argument('--gpg-passphrase-file', type=str, help="The path to the gpg passphrase file for signing the publish")
 
     group_promote = parser.add_argument_group("Action 'promote'")
     group_promote.add_argument('--source', help="Source publish to take snapshots from. Can be regular expression, eg. jessie(/?.*)/nightly")
