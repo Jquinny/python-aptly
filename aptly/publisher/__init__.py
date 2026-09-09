@@ -2,6 +2,7 @@
 
 import time
 import re
+import sys
 import logging
 import yaml
 import apt_pkg
@@ -9,6 +10,8 @@ from aptly.exceptions import AptlyException, NoSuchPublish
 from aptly.decorators import CachedMethod
 
 lg = logging.getLogger(__name__)
+
+_RE_PATTERN = re.Pattern if sys.version_info >= (3, 7) else re._pattern_type
 
 
 def load_publish(publish):
@@ -108,11 +111,11 @@ class PublishManager(object):
         """
         if names:
             for name in names:
-                if not name_only and isinstance(name, re._pattern_type):
+                if not name_only and isinstance(name, _RE_PATTERN):
                     if re.match(name, publish.name):
                         return True
                 else:
-                    operand = name if name_only else [name, "./%s" % name]
+                    operand = [name] if name_only else [name, "./%s" % name]
                     if publish in operand:
                         return True
             return False
