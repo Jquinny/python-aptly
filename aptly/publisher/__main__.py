@@ -12,6 +12,7 @@ import yaml
 import logging
 import copy
 import re
+from pathlib import Path
 
 logging.basicConfig()
 lg_aptly = logging.getLogger('aptly')
@@ -20,7 +21,7 @@ lg = logging.getLogger('aptly-publisher')
 
 def load_config(config):
     with open(config, 'r') as fh:
-        return yaml.load(fh)
+        return yaml.safe_load(fh)
 
 
 def get_latest_snapshot(snapshots, name):
@@ -53,6 +54,7 @@ def main():
     group_publish.add_argument('--dists', nargs='+', help="Space-separated list of distribution to work with (including prefix), default all.")
     group_publish.add_argument('--architectures', nargs='+', help="List of architectures to publish (also determined by config, defaults to amd64, i386)")
     group_publish.add_argument('--only-latest', action="store_true", default=False, help="Publish only latest packages of every publishes")
+    group_publish.add_argument('--gpg-passphrase-file', type=str, help="The path to the gpg passphrase file for signing the publish")
 
     group_promote = parser.add_argument_group("Action 'promote'")
     group_promote.add_argument('--source', help="Source publish to take snapshots from. Can be regular expression, eg. jessie(/?.*)/nightly")
@@ -94,7 +96,8 @@ def main():
                        publish_dist=args.dists,
                        architectures=args.architectures,
                        only_latest=args.only_latest,
-                       components=args.components)
+                       components=args.components,
+                       gpg_passphrase_file=args.gpg_passphrase_file)
     elif args.action == 'promote':
         if not args.source or not args.target:
             parser.error("Action 'promote' requires both --source and --target arguments")
@@ -305,7 +308,7 @@ def action_publish(client, publishmgr, config_file, recreate=False,
                    no_recreate=False, force_overwrite=False,
                    publish_contents=False, acquire_by_hash=False,
                    publish_dist=None, publish_names=None, architectures=None,
-                   only_latest=False, components=[]):
+                   only_latest=False, components=[], gpg_passphrase_file=None):
     if not architectures:
         architectures = []
     snapshots = Publish._get_snapshots(client)
@@ -345,7 +348,8 @@ def action_publish(client, publishmgr, config_file, recreate=False,
                           publish_contents=publish_contents, dist=publish_dist,
                           names=publish_names, architectures=architectures,
                           only_latest=only_latest, config=config,
-                          components=components)
+                          components=components,
+                          gpg_passphrase_file=gpg_passphrase_file)
 
 
 if __name__ == '__main__':
