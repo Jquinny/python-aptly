@@ -5,6 +5,7 @@ import re
 import sys
 import logging
 import yaml
+import functools
 import apt_pkg
 from aptly.exceptions import AptlyException, NoSuchPublish
 from aptly.decorators import CachedMethod
@@ -497,9 +498,13 @@ class Publish(object):
             packages = self._get_packages(self.client, "snapshots", name)
             packages = sorted(
                 packages,
-                key=lambda x: self.parse_package_ref(x)[2],
+                key=functools.cmp_to_key(
+                    lambda x, y: apt_pkg.version_compare(
+                        self.parse_package_ref(x)[2],
+                        self.parse_package_ref(y)[2],
+                    )
+                ),
                 reverse=True,
-                cmp=apt_pkg.version_compare,
             )
 
             for package in packages:
